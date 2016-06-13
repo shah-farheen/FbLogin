@@ -1,7 +1,6 @@
 package com.bits.farheen.fblogin;
 
 import android.content.Intent;
-import android.content.pm.PackageInstaller;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -22,9 +21,6 @@ import com.facebook.ProfileTracker;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,6 +30,7 @@ public class MainActivity extends AppCompatActivity {
     String TAG = "MainActivity";
     ProfileTracker profileTracker;
     AccessTokenTracker accessTokenTracker;
+    Profile profile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +52,9 @@ public class MainActivity extends AppCompatActivity {
         profileTracker = new ProfileTracker() {
             @Override
             protected void onCurrentProfileChanged(Profile oldProfile, Profile currentProfile) {
+                if(currentProfile!=null){
+                    makeRequest(AccessToken.getCurrentAccessToken(),currentProfile.getId());
+                }
 
             }
         };
@@ -65,9 +65,11 @@ public class MainActivity extends AppCompatActivity {
         loginButton.registerCallback(callbackManager, new FacebookCallback<LoginResult>() {
             @Override
             public void onSuccess(LoginResult loginResult) {
-                Profile profile = Profile.getCurrentProfile();
-                makeRequest(AccessToken.getCurrentAccessToken(), profile.getId());
-            }
+                profile = Profile.getCurrentProfile();
+                if(profile!=null){
+                    makeRequest(AccessToken.getCurrentAccessToken(), profile.getId());
+                }
+                 }
 
             @Override
             public void onCancel() {

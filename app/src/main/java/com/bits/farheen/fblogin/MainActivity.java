@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void makeRequest(AccessToken accessToken, String userId){
-        GraphRequest request = new GraphRequest(accessToken, "/"+userId+"/likes", null, HttpMethod.GET
+        GraphRequest request = new GraphRequest(accessToken, "/"+userId+"/friends", null, HttpMethod.GET
                 , new GraphRequest.Callback() {
             @Override
             public void onCompleted(GraphResponse response) {

@@ -2,9 +2,13 @@ package com.bits.farheen.fblogin;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.facebook.AccessToken;
 import com.facebook.AccessTokenTracker;
@@ -20,6 +24,15 @@ import com.facebook.Profile;
 import com.facebook.ProfileTracker;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.AuthResult;
+import com.google.firebase.auth.FacebookAuthProvider;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
+import org.json.JSONObject;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -31,11 +44,42 @@ public class MainActivity extends AppCompatActivity {
     ProfileTracker profileTracker;
     AccessTokenTracker accessTokenTracker;
     Profile profile;
+    Button buttonLogout;
+
+    private FirebaseAuth mAuth;
+    private FirebaseAuth.AuthStateListener mAuthListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        buttonLogout = (Button) findViewById(R.id.button_logout);
+
+        buttonLogout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mAuth.signOut();
+            }
+        });
+
+        //Firebase Login //////////////////////////////////////////////////////////////////////////
+
+        mAuth = FirebaseAuth.getInstance();
+        mAuthListener = new FirebaseAuth.AuthStateListener() {
+            @Override
+            public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
+                FirebaseUser user = firebaseAuth.getCurrentUser();
+                if(user!=null){
+                    Log.d(TAG, "onAuthStateChanged:signed_in:"+user.getUid());
+                }
+                else {
+                    Log.d(TAG, "onAuthStateChanged:signed_out:");
+                }
+            }
+        };
+
+        //Facebook Login //////////////////////////////////////////////////////////////////////////
+
         FacebookSdk.sdkInitialize(getApplicationContext());
         callbackManager = CallbackManager.Factory.create();
         loginButton = (LoginButton) findViewById(R.id.login_button);
@@ -53,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             protected void onCurrentProfileChanged(Profile oldProfile, Profile currentProfile) {
                 if(currentProfile!=null){
-                    makeRequest(AccessToken.getCurrentAccessToken(),currentProfile.getId());
+                    makeRequest(AccessToken.getCurrentAccessToken());
                 }
 
             }
@@ -61,13 +105,14 @@ public class MainActivity extends AppCompatActivity {
         profileTracker.startTracking();
 
         FacebookSdk.addLoggingBehavior(LoggingBehavior.REQUESTS);
-        loginButton.setReadPermissions("user_friends","user_education_history","user_likes");
+        loginButton.setReadPermissions("user_friends","user_education_history","user_likes", "email", "user_birthday","public_profile");
         loginButton.registerCallback(callbackManager, new FacebookCallback<LoginResult>() {
             @Override
             public void onSuccess(LoginResult loginResult) {
                 profile = Profile.getCurrentProfile();
                 if(profile!=null){
-                    makeRequest(AccessToken.getCurrentAccessToken(), profile.getId());
+                    makeRequest(AccessToken.getCurrentAccessToken());
+                    handleFacebookAccessToken(AccessToken.getCurrentAccessToken());
                 }
                  }
 
@@ -90,21 +135,49 @@ public class MainActivity extends AppCompatActivity {
         callbackManager.onActivityResult(requestCode,resultCode,data);
     }
 
-    public void makeRequest(AccessToken accessToken, String userId){
-        GraphRequest request = new GraphRequest(accessToken, "/"+userId+"/friends", null, HttpMethod.GET
-                , new GraphRequest.Callback() {
+    public void makeRequest(AccessToken accessToken){
+        GraphRequest request = GraphRequest.newMeRequest(accessToken, new GraphRequest.GraphJSONObjectCallback() {
             @Override
-            public void onCompleted(GraphResponse response) {
-                Log.d(TAG, response.toString());
+            public void onCompleted(JSONObject object, GraphResponse response) {
+                Log.d(TAG, "object: "+object.toString());
             }
         });
+
         request.executeAsync();
     }
 
+    private void handleFacebookAccessToken(AccessToken accessToken){
+        Log.d(TAG, "handleFacebookAccessToken:"+accessToken.getToken());
+
+        AuthCredential credential = FacebookAuthProvider.getCredential(accessToken.getToken());
+        mAuth.signInWithCredential(credential)
+                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
+                    @Override
+                    public void onComplete(@NonNull Task<AuthResult> task) {
+                        Log.d(TAG, "signInWithCredential:onComplete: "+task.isSuccessful());
+
+                        if(!task.isSuccessful()){
+                            Log.d(TAG, "signInWithCredential", task.getException());
+                            Toast.makeText(getApplicationContext(),"Authentication Failed", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+    }
+
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
+    protected void onStart() {
+        super.onStart();
+        mAuth.addAuthStateListener(mAuthListener);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
         accessTokenTracker.stopTracking();
         profileTracker.stopTracking();
+
+        if(mAuthListener != null){
+            mAuth.removeAuthStateListener(mAuthListener);
+        }
     }
 }
